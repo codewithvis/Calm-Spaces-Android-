@@ -153,7 +153,13 @@ export default function ExpertChatPage() {
                 .from('messages')
                 .insert([messageData])
                 .select()
-        .maybeSingle();
+                .maybeSingle();
+
+            if (error) {
+                console.error('Error sending message:', error);
+                Alert.alert('Error', 'Failed to send message. Please try again.');
+                return;
+            }
 
             // Add to local state for immediate UI update
             if (data) {

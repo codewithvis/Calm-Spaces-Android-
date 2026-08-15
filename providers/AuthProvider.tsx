@@ -20,10 +20,13 @@ export default function AuthProvider({children}: PropsWithChildren) {
         const fetchSession = async() => {
             try {
                 const {data, error} = await supabase.auth.getSession();
+                if (error) {
+                    console.error('Auth getSession error:', error.message);
+                }
                 setSession(data.session);
                 setLoading(false);
             } catch (err) {
-                console.error('Error fetching session:', err);
+                console.error('Exception fetching session:', err);
                 setLoading(false);
             }
         };

@@ -86,11 +86,18 @@ export default function Chat() {
       }
 
       // It's likely a registration number, look up the UUID
+      const regNum = parseInt(participantId, 10);
+      if (isNaN(regNum)) {
+          console.error('Invalid participant registration number:', participantId);
+          setIsResolvingId(false);
+          return;
+      }
+
       try {
         const { data, error } = await supabase
           .from('profiles')
           .select('id')
-          .eq('registration_number', participantId)
+          .eq('registration_number', regNum)
           .maybeSingle();
 
         if (error) {

@@ -254,8 +254,9 @@ export default function StudentRegister() {
     setLastAttemptTime(now);
 
     try {
+      logger.info('Attempting registration for email:', { email });
+
       // Step 1: Sign up the user with all profile data in metadata
-      // This works with the DB trigger to create an atomic profile.
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -274,110 +275,51 @@ export default function StudentRegister() {
 
       if (authError) {
         logger.error('Registration auth failure', authError);
-        // ... (rest of error handling remains same)
 
         if (isCaptchaAuthError(authError.message)) {
           const authErrorDetails = getAuthErrorDetails(authError.message);
-          Alert.alert(authErrorDetails.title, authErrorDetails.message, [{ text: 'OK', style: 'default' }]);
+          Alert.alert(authErrorDetails.title, authErrorDetails.message);
           setLoading(false);
           return;
         }
 
-        // Handle rate limiting - most common error from your screenshot
-        if (authError.message.toLowerCase().includes('rate limit') ||
-          authError.message.toLowerCase().includes('too many requests') ||
-          authError.message.toLowerCase().includes('email rate limit') ||
-          authError.status === 429) {
-          Alert.alert(
-            "⏱️ Rate Limit Reached",
-            "Too many registration attempts detected. This is a security feature from Supabase.\n\n" +
-            "Solutions:\n" +
-            "1. Wait 2-3 minutes and try again\n" +
-            "2. Try using a different email address\n" +
-            "3. Check if you already have an account\n\n" +
-            "If this persists, contact support.",
-            [
-              {
-                text: "Try Different Email",
-                onPress: () => setEmail(''),
-              },
-              {
-                text: "OK",
-                style: "cancel"
-              }
-            ]
-          );
-        }
-        // Handle email already exists
-        else if (authError.message.toLowerCase().includes('already registered') ||
-          authError.message.toLowerCase().includes('already been registered') ||
-          authError.message.toLowerCase().includes('user already registered')) {
-          Alert.alert(
-            "Email already exists",
-            "This email is already registered. Please use a different email or try logging in.",
-            [
-              {
-                text: "Go to Login",
-                onPress: () => router.replace('/'),
-              },
-              {
-                text: "Try Different Email",
-                onPress: () => setEmail(''),
-              }
-            ]
-          );
-        }
-        // Handle other email issues
-        else if (authError.message.toLowerCase().includes('email')) {
-          Alert.alert("Email issue", authError.message);
-        }
-        // Generic error
-        else {
-          Alert.alert("Sign up failed", authError.message);
+        // Handle specific Supabase errors
+        const msg = authError.message.toLowerCase();
+        if (msg.includes('rate limit') || authError.status === 429) {
+          Alert.alert("⏱️ Rate Limit", "Too many attempts. Please wait a few minutes.");
+        } else if (msg.includes('already registered') || msg.includes('exists')) {
+          Alert.alert("Account exists", "This email is already registered. Please login instead.", [
+            { text: "Go to Login", onPress: () => router.replace('/') }
+          ]);
+        } else {
+          Alert.alert("Registration Failed", authError.message);
         }
         setLoading(false);
         return;
       }
 
-      // Step 2: Check if user was created successfully
       if (!authData?.user) {
-        Alert.alert("Error", "Failed to create user account. Please try again.");
+        Alert.alert("Error", "Account creation returned no data. Please try again.");
         setLoading(false);
         return;
       }
 
-      logger.info('User created and profile triggered successfully', { userId: authData.user.id });
+      logger.info('Auth account created successfully', { userId: authData.user.id });
 
-      // Wait a moment to ensure profile trigger is fully committed to database
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // Step 2: Sign in the user
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (signInError) {
-        logger.error('Automatic sign-in after registration failed', signInError);
-
-        if (isCaptchaAuthError(signInError.message)) {
-          const authErrorDetails = getAuthErrorDetails(signInError.message, 'Automatic login failed');
-          Alert.alert(authErrorDetails.title, authErrorDetails.message, [{ text: 'OK', style: 'default' }]);
-          router.replace('/');
-          setLoading(false);
-          return;
-        }
-
+      // If email confirmation is required, the session might be null
+      if (!authData.session) {
         Alert.alert(
-          'Registration successful',
-          'Account created but automatic login failed. Please log in manually.'
+          "Verify your email",
+          "Account created! Please check your inbox and verify your email address before logging in.",
+          [{ text: "OK", onPress: () => router.replace('/') }]
         );
-        router.replace('/');
         setLoading(false);
         return;
       }
 
-      // Step 5: Success - show toast and let AuthProvider handle navigation
+      // If we reach here, we have a session. Wait for trigger to complete just in case.
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       Toast.show({
         type: 'success',
         text1: 'Registration successful!',
@@ -386,34 +328,12 @@ export default function StudentRegister() {
         visibilityTime: 2000,
       });
 
-      // Let AuthProvider detect the new session and redirect automatically
-      // This prevents competing navigation attempts
-      setLoading(false);
+      // Navigate to home - AuthProvider will also handle this via session change
+      router.replace('/student/student-home');
 
     } catch (err: any) {
       logger.error('Registration logic exception', err);
-
-      // Handle network errors
-      if (err.message?.includes('fetch') || err.message?.includes('network')) {
-        Alert.alert(
-          "Network error",
-          "Unable to reach server. Please check your internet connection and try again."
-        );
-      }
-      // Handle timeout errors
-      else if (err.message?.includes('timeout')) {
-        Alert.alert(
-          "Request timeout",
-          "The request took too long. Please try again."
-        );
-      }
-      // Generic error
-      else {
-        Alert.alert(
-          "Registration error",
-          "Something went wrong. Please try again or contact support."
-        );
-      }
+      Alert.alert("Error", "An unexpected error occurred. Please check your connection.");
     } finally {
       setLoading(false);
     }

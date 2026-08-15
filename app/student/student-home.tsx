@@ -72,8 +72,12 @@ export default function StudentHome() {
 
     const listeners = setupNotificationListeners(
       () => {},
-      (response) => {
-        if (response.notification.request.content.data?.type === 'mood_reminder') setMoodModalVisible(true);
+      async (response) => {
+        if (response.notification.request.content.data?.type === 'mood_reminder') {
+          // Refresh prompt info before showing modal
+          await checkForMoodPrompt();
+          setMoodModalVisible(true);
+        }
       }
     );
     return () => removeNotificationListeners(listeners);

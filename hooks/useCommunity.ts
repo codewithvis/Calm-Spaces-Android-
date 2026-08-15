@@ -9,32 +9,31 @@ export const useCommunity = (userRegNo: string | undefined) => {
   const { data: posts = [], isLoading: loadingPosts } = useQuery({
     queryKey: ['community_posts'],
     queryFn: async () => {
-      const { data: postsData, error: postsError } = await supabase
-        .from('community_post')
+      // Use the SECURE VIEW to avoid PII leakage
+      const { data, error } = await supabase
+        .from('community_feed')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (postsError) throw postsError;
-      if (!postsData) return [];
+      if (error) {
+        // Fallback for legacy support or if migration isn't applied yet
+        const { data: postsData, error: postsError } = await supabase
+          .from('community_post')
+          .select('*, profiles(name, username, profile_picture_index, type)')
+          .order('created_at', { ascending: false });
 
-      const userIds = Array.from(new Set(postsData.map(post => post.user_id)));
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('name, username, profile_picture_index, registration_number, type')
-        .in('registration_number', userIds);
+        if (postsError) throw postsError;
 
-      const profileMap = new Map();
-      profilesData?.forEach(p => profileMap.set(String(p.registration_number), p));
-
-      return postsData.map(post => {
-        const userData = profileMap.get(String(post.user_id));
-        return {
+        return (postsData || []).map(post => ({
           ...post,
-          username: userData?.name || userData?.username || `User ${post.user_id}`,
-          userLabel: userData?.type || 'USER',
-          profilePicIndex: userData?.profile_picture_index || 0
-        };
-      });
+          author_name: post.profiles?.name || post.profiles?.username || 'User',
+          author_profile_pic: post.profiles?.profile_picture_index || 0,
+          author_type: post.profiles?.type || 'STUDENT',
+          author_id: post.profile_id || post.user_id
+        }));
+      }
+
+      return data || [];
     },
     staleTime: 1000 * 60 * 5,
   });

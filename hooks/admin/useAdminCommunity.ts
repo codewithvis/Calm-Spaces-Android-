@@ -16,43 +16,32 @@ export const useAdminCommunity = () => {
   const fetchPosts = useCallback(async () => {
     setLoadingPosts(true);
     try {
+      // Use secure view
       const { data, error } = await supabase
-        .from('community_post')
+        .from('community_feed')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        // Fallback for legacy support
+        const { data: postsData, error: postsError } = await supabase
+          .from('community_post')
+          .select('*, profiles(name, username, profile_picture_index, type)')
+          .order('created_at', { ascending: false });
 
-      const postsWithUserData = await Promise.all(
-        (data || []).map(async (post) => {
-          try {
-            let username = `User ${post.user_id}`;
-            const { data: userData } = await supabase
-              .from('profiles')
-              .select('username, name')
-              .eq('registration_number', post.user_id)
-              .maybeSingle();
+        if (postsError) throw postsError;
 
-            if (userData) {
-              username = userData.name || userData.username || `User ${post.user_id}`;
-            }
+        setPosts((postsData || []).map(post => ({
+          ...post,
+          author_name: post.profiles?.name || post.profiles?.username || 'User',
+          author_profile_pic: post.profiles?.profile_picture_index || 0,
+          author_type: post.profiles?.type || 'STUDENT',
+          author_id: post.profile_id || post.user_id
+        })));
+        return;
+      }
 
-            return {
-              ...post,
-              username,
-              profilePicIndex: Math.floor(Math.random() * profilePics.length)
-            };
-          } catch (error) {
-            return {
-              ...post,
-              username: `User ${post.user_id}`,
-              profilePicIndex: 0
-            };
-          }
-        })
-      );
-
-      setPosts(postsWithUserData);
+      setPosts(data || []);
     } catch (error) {
       logger.error('Error fetching posts', error);
     } finally {
@@ -60,7 +49,7 @@ export const useAdminCommunity = () => {
     }
   }, []);
 
-  const createPost = async (text: string, media: { uri: string; type: 'image' | 'video' } | null, adminRegNo: string) => {
+  const createPost = async (text: string, media: { uri: string; type: 'image' | 'video' } | null, adminId: string) => {
     if (!text.trim() && !media) return false;
 
     setIsPosting(true);
@@ -73,7 +62,7 @@ export const useAdminCommunity = () => {
       const { error } = await supabase
         .from('community_post')
         .insert([{
-          user_id: adminRegNo || 'admin',
+          profile_id: adminId,
           content: text.trim(),
           media_url: mediaUrl,
           media_type: media?.type || null,
@@ -143,41 +132,38 @@ export const useAdminCommunity = () => {
   const fetchComments = async (postId: string) => {
     setLoadingComments(true);
     try {
+      // Use secure view
       const { data, error } = await supabase
-        .from('post_comment')
+        .from('community_comments')
         .select('*')
         .eq('post_id', postId)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        // Fallback
+        const { data: fbData, error: fbError } = await supabase
+          .from('post_comment')
+          .select('*, profiles(name, username, profile_picture_index, type)')
+          .eq('post_id', postId)
+          .order('created_at', { ascending: true });
 
-      const commentsWithUserData = await Promise.all(
-        (data || []).map(async (comment) => {
-          let username = `User ${comment.user_id}`;
-          let userLabel = 'USER';
+        if (fbError) throw fbError;
 
-          if (comment.user_id === 'admin') {
-            username = 'Admin';
-            userLabel = 'ADMIN';
-          } else {
-            const { data: userData } = await supabase
-              .from('profiles')
-              .select('name, username, type, registration_number')
-              .eq('registration_number', comment.user_id)
-              .maybeSingle();
+        setComments((fbData || []).map(c => ({
+          ...c,
+          author_name: c.profiles?.name || c.profiles?.username || 'User',
+          author_profile_pic: c.profiles?.profile_picture_index || 0,
+          author_type: c.profiles?.type || 'STUDENT',
+          isExpert: c.profiles?.type === 'EXPERT',
+          author_id: c.profile_id || c.user_id
+        })));
+        return;
+      }
 
-            if (userData) {
-              username = userData.username || userData.name || `User ${comment.user_id}`;
-              userLabel = userData.type === 'EXPERT' ? 'EXPERT' :
-                          userData.type === 'PEER' ? 'PEER LISTENER' : 'USER';
-            }
-          }
-
-          return { ...comment, username, userLabel };
-        })
-      );
-
-      setComments(commentsWithUserData);
+      setComments((data || []).map(c => ({
+        ...c,
+        isExpert: c.author_type === 'EXPERT'
+      })));
     } catch (error) {
       logger.error('Error fetching comments', error);
     } finally {
@@ -185,13 +171,13 @@ export const useAdminCommunity = () => {
     }
   };
 
-  const addComment = async (postId: string, text: string, adminRegNo: string) => {
+  const addComment = async (postId: string, text: string, adminId: string) => {
     try {
       const { error } = await supabase
         .from('post_comment')
         .insert([{
           post_id: postId,
-          user_id: adminRegNo || 'admin',
+          profile_id: adminId,
           content: text.trim(),
           created_at: new Date().toISOString()
         }]);

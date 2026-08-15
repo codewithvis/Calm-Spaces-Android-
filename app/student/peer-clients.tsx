@@ -317,12 +317,13 @@ export default function PeerClientsPage() {
               };
 
               const sessionTimeFormatted = convertTimeToDBFormat(sessionData.session_time);
+              const peerRegNum = parseInt(profile?.registration_number?.toString() || '0', 10);
 
               // Check if slot is still available in student_schedule
               const { data: availableSlots, error: slotCheckError } = await supabase
                 .from('student_schedule')
                 .select('*')
-                .eq('peer_registration_number', profile?.registration_number)
+                .eq('peer_registration_number', peerRegNum)
                 .eq('date', sessionData.session_date)
                 .eq('is_available', true);
 

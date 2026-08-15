@@ -48,8 +48,11 @@ export default function ExpertHome() {
 
     const listeners = setupNotificationListeners(
       () => {},
-      (response) => {
-        if (response.notification.request.content.data?.type === 'mood_reminder') setMoodModalVisible(true);
+      async (response) => {
+        if (response.notification.request.content.data?.type === 'mood_reminder') {
+          await checkForMoodPrompt();
+          setMoodModalVisible(true);
+        }
       }
     );
     return () => removeNotificationListeners(listeners);

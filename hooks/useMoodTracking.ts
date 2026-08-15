@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { sendLocalNotification } from '@/lib/notificationService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { logger } from '@/lib/logger';
 
 export const MOOD_EMOJIS = [
   { emoji: '😄', label: 'Happy' },
@@ -129,31 +130,67 @@ export const useMoodTracking = (userId: string | undefined, userType: string = '
         setMissedPromptsQueue(missed);
         return true;
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error('Error in checkForMoodPrompt:', err);
+    }
     return false;
   }, [userId, lastNotificationDate, sentNotificationsToday]);
 
   const saveMood = async (mood: string, notes: string = '') => {
-    if (!userId) return false;
+    if (!userId) {
+      logger.error('Cannot save mood: No user ID');
+      return false;
+    }
+
     const moodDataInfo = MOOD_EMOJIS.find(m => m.emoji === mood);
+
+    // Ensure we have a schedule key if we're responding to a prompt
+    // but allow unscheduled entries too
+    const finalScheduleKey = currentPromptInfo?.scheduleKey || '';
+    const finalScheduledLabel = currentPromptInfo?.timeLabel || 'Unscheduled';
+
     try {
-      const { error } = await supabase.from('mood_entries').insert({
+      const moodEntry = {
         user_id: userId,
-        user_type: userType,
+        user_type: userType || 'STUDENT',
         mood_emoji: mood,
         mood_label: moodDataInfo?.label || 'Unknown',
         entry_date: getTodayKey(),
-        entry_time: new Date().toTimeString().split(' ')[0],
-        scheduled_label: currentPromptInfo?.timeLabel || 'Unscheduled',
-        schedule_key: currentPromptInfo?.scheduleKey || '',
+        entry_time: new Date().toLocaleTimeString('en-GB', { hour12: false }),
+        scheduled_label: finalScheduledLabel,
+        schedule_key: finalScheduleKey,
         notes: notes.trim() || null
-      });
-      if (error) throw error;
-      queryClient.invalidateQueries({ queryKey: ['mood_entries', userId] });
+      };
+
+      logger.info('Saving mood entry...', { key: finalScheduleKey });
+
+      const { data, error } = await supabase
+        .from('mood_entries')
+        .insert([moodEntry])
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        logger.error('Supabase error saving mood:', error);
+        Alert.alert('Save Failed', `Unable to save your mood: ${error.message}`);
+        return false;
+      }
+
+      logger.info('Mood saved successfully', { id: data?.id });
+
+      // Refresh data
+      await queryClient.invalidateQueries({ queryKey: ['mood_entries', userId] });
+
+      // Clear current prompt
       setCurrentPromptInfo(null);
+
+      // If we had more missed prompts, maybe don't clear the queue entirely
+      // but let the next checkForMoodPrompt handle it
+
       return true;
-    } catch (err) {
-      Alert.alert('Error', 'Failed to save mood');
+    } catch (err: any) {
+      logger.error('Exception in saveMood:', err);
+      Alert.alert('Error', 'An unexpected error occurred while saving your mood.');
       return false;
     }
   };

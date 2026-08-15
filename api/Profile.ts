@@ -53,7 +53,7 @@ export const useSaveProfileChanges = () => {
         .from("profiles")
         .update({
           username: data.username,
-          full_name: data.name,
+          name: data.name,
         })
         .eq("id", data.id)
         .select()

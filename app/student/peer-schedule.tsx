@@ -15,7 +15,7 @@ interface TimeSlot {
   end_time: string;
   is_available: boolean;
   peer_name?: string;
-  peer_registration_number?: string;
+  peer_registration_number?: number;
 }
 
 const DEFAULT_SLOTS = [
@@ -66,9 +66,15 @@ export default function PeerSchedule() {
 
   // Function to automatically generate default slots for all dates in the month
   const autoGenerateMonthlySlots = async () => {
-    if (!profile) return;
+    if (!profile || !profile.registration_number) return;
 
     try {
+      const regNum = parseInt(profile.registration_number.toString(), 10);
+      if (isNaN(regNum)) {
+          console.error('Invalid peer registration number for auto-generation');
+          return;
+      }
+
       const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
       const today = new Date();
@@ -78,7 +84,7 @@ export default function PeerSchedule() {
       const { data: existingSlots, error: fetchError } = await supabase
         .from('student_schedule')
         .select('date, start_time, end_time')
-        .eq('peer_registration_number', profile.registration_number)
+        .eq('peer_registration_number', regNum)
         .gte('date', formatDateToLocalString(startOfMonth))
         .lte('date', formatDateToLocalString(endOfMonth));
 

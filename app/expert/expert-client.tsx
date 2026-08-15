@@ -204,15 +204,17 @@ export default function ExpertClientPage() {
               };
 
               const startTime = convertTimeFormat(session.session_time);
+              const expertRegNum = parseInt(session.expert_registration_number || '0', 10);
+              const studentRegNum = parseInt(session.student_registration_number || '0', 10);
 
               // Update the expert_schedule to mark slot as booked
               const { error: scheduleError } = await supabase
                 .from('expert_schedule')
                 .update({
                   is_available: false,
-                  booked_by: session.student_registration_number
+                  booked_by: studentRegNum
                 })
-                .eq('expert_registration_number', session.expert_registration_number)
+                .eq('expert_registration_number', expertRegNum)
                 .eq('date', session.session_date)
                 .eq('start_time', startTime);
 

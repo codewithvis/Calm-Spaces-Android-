@@ -12,5 +12,6 @@ export interface SessionRequest {
   updated_at: string;
   notes?: string;
   expert_name?: string;
-  expert_registration?: string;
+  expert_registration_number?: string;
+  expert_id?: string;
 }

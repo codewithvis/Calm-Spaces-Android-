@@ -54,7 +54,8 @@ export default function AdminHome() {
   };
 
   const handleCreatePost = async () => {
-    const success = await createPost(postText, selectedMedia, 'admin');
+    if (!session?.user?.id) return;
+    const success = await createPost(postText, selectedMedia, session.user.id);
     if (success) {
       setPostModalVisible(false);
       setPostText('');
@@ -202,7 +203,11 @@ export default function AdminHome() {
         newComment={newComment}
         onClose={() => setCommentsModalVisible(false)}
         onNewCommentChange={setNewComment}
-        onAddComment={() => addComment(selectedPost!.id, newComment, 'admin').then(() => setNewComment(''))}
+        onAddComment={() => {
+          if (session?.user?.id) {
+            addComment(selectedPost!.id, newComment, session.user.id).then(() => setNewComment(''));
+          }
+        }}
         onDeleteComment={(id) => deleteComment(id, selectedPost!.id)}
       />
     </SafeAreaView>

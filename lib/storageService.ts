@@ -45,31 +45,37 @@ export const storageService = {
       logger.info(`Searching for storage files to clean up for user: ${userId}`);
 
       // 1. Find community post media (Using profile_id/UUID)
-      const { data: posts } = await supabase
+      const { data: posts, error: postsError } = await supabase
         .from('community_post')
         .select('media_url')
         .eq('profile_id', userId);
 
-      if (posts && posts.length > 0) {
+      if (postsError) {
+        logger.error('Error fetching posts for cleanup', postsError);
+      } else if (posts && posts.length > 0) {
         const urls = posts.map(p => p.media_url);
         await this.deleteFilesByUrls(urls, 'media');
       }
 
       // 2. Fallback for legacy data (registration number)
       // This can be removed after data migration is fully confirmed
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('registration_number')
         .eq('id', userId)
         .maybeSingle();
 
-      if (profile?.registration_number) {
-        const { data: legacyPosts } = await supabase
+      if (profileError) {
+          logger.error('Error fetching profile for legacy cleanup', profileError);
+      } else if (profile?.registration_number) {
+        const { data: legacyPosts, error: legacyPostsError } = await supabase
           .from('community_post')
           .select('media_url')
           .eq('user_id', profile.registration_number.toString());
 
-        if (legacyPosts && legacyPosts.length > 0) {
+        if (legacyPostsError) {
+            logger.error('Error fetching legacy posts for cleanup', legacyPostsError);
+        } else if (legacyPosts && legacyPosts.length > 0) {
           const urls = legacyPosts.map(p => p.media_url);
           await this.deleteFilesByUrls(urls, 'media');
         }

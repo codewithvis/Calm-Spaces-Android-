@@ -19,8 +19,9 @@ import { useAuth } from '@/providers/AuthProvider';
 
 interface TimeSlot {
   id?: string;
-  expert_registration: string;
+  expert_registration_number: number;
   expert_name: string;
+  expert_id: string;
   date: string;
   start_time: string;
   end_time: string;
