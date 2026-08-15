@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SafeAreaView, View, Text, TextInput, TouchableOpacity, ScrollView, FlatList, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { logger } from '@/lib/logger';
+import { useAuth } from '@/providers/AuthProvider';
 import { pickMediaFromGallery } from '@/lib/utils';
 import { useAdminUsers } from '@/hooks/admin/useAdminUsers';
 import { useAdminCommunity } from '@/hooks/admin/useAdminCommunity';
@@ -12,11 +12,12 @@ import { CommunityPostCard } from '@/components/admin/CommunityPostCard';
 import { UserTypeModal } from '@/components/admin/modals/UserTypeModal';
 import { PostModal } from '@/components/admin/modals/PostModal';
 import { CommentsModal } from '@/components/admin/modals/CommentsModal';
-import { AdminUser, UserStatistics } from '@/types/Admin';
+import { AdminUser } from '@/types/Admin';
 import { CommunityPost } from '@/types/Community';
 
 export default function AdminHome() {
   const router = useRouter();
+  const { session } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'settings' | 'BuddyConnect'>('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [userTypeFilter, setUserTypeFilter] = useState<string | null>(null);
@@ -32,8 +33,6 @@ export default function AdminHome() {
   const [userTypeModalVisible, setUserTypeModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [postModalVisible, setPostModalVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingPost, setEditingPost] = useState<CommunityPost | null>(null);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
 
@@ -46,7 +45,7 @@ export default function AdminHome() {
     if (activeTab === 'settings') {
       router.push('./admin-setting');
     }
-  }, [activeTab]);
+  }, [activeTab, router]);
 
   const handlePickMedia = async () => {
     const result = await pickMediaFromGallery();
@@ -61,18 +60,6 @@ export default function AdminHome() {
       setPostText('');
       setSelectedMedia(null);
       Alert.alert('Success', 'Post created successfully!');
-    }
-  };
-
-  const handleUpdatePost = async () => {
-    if (!editingPost) return;
-    const success = await updatePost(editingPost.id, postText, selectedMedia, editingPost.media_url);
-    if (success) {
-      setEditModalVisible(false);
-      setPostText('');
-      setSelectedMedia(null);
-      setEditingPost(null);
-      Alert.alert('Success', 'Post updated successfully!');
     }
   };
 
