@@ -87,6 +87,7 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~55.0.1",
     "expo-module-scripts": "^56.0.3",
+    "expo-modules-core": "~55.0.0",
     "jest": "^29.7.0",
     "jest-expo": "^55.0.20",
     "ts-jest": "^29.4.12",

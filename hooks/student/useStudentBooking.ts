@@ -1,12 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { Alert } from 'react-native';
 import { Profile } from '@/types/Profile';
+import { generateIdempotencyKey } from '@/lib/idempotency';
+import { mapApiError } from '@/lib/errorHandler';
 
 export const useStudentBooking = (profile: Profile | null | undefined) => {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [availableSlots, setAvailableSlots] = useState<any[]>([]);
+  const bookingKeys = useRef(new Map<string, string>());
 
   const loadSlots = useCallback(async (registrationNumber: string, date: string, type: 'EXPERT' | 'PEER') => {
     setLoadingSlots(true);
@@ -43,29 +46,36 @@ export const useStudentBooking = (profile: Profile | null | undefined) => {
     if (!profile) return false;
 
     try {
-      const sessionRequestData = {
-        student_id: profile.id,
-        student_name: profile.name,
-        student_email: profile.email,
-        student_course: profile.course,
-        student_registration_number: profile.registration_number,
-        expert_registration_number: params.expertReg,
-        expert_name: params.expertName,
-        expert_id: params.expertId,
-        session_date: params.date,
-        session_time: params.time,
-        booking_mode: params.mode,
-        status: 'pending',
-        session_type: params.type === 'PEER' ? 'peer_listener' : 'expert',
-      };
+      const selectedSlot = availableSlots.find((slot) => slot.start_time === params.time);
+      if (!selectedSlot?.id) {
+        throw new Error('INVALID_REQUEST: Selected slot is no longer available');
+      }
 
-      const { data, error } = await supabase
-        .from('book_request')
-        .insert([sessionRequestData])
-        .select()
-        .maybeSingle();
+      const bookingKey = `${params.type}:${selectedSlot.id}`;
+      const idempotencyKey = bookingKeys.current.get(bookingKey) ?? generateIdempotencyKey();
+      bookingKeys.current.set(bookingKey, idempotencyKey);
 
-      if (error) throw error;
+      const { error } = await supabase.functions.invoke('book-session', {
+        body: {
+          expertId: params.expertId,
+          slotId: selectedSlot.id,
+          expertRegistrationNumber: params.expertReg,
+          expertName: params.expertName,
+          date: params.date,
+          time: params.time,
+          mode: params.mode,
+          type: params.type,
+          idempotencyKey,
+        },
+      });
+
+      if (error) {
+        const mapped = mapApiError(error);
+        Alert.alert('Unable to book', mapped.userMessage);
+        return false;
+      }
+
+      bookingKeys.current.delete(bookingKey);
       return true;
     } catch (error) {
       logger.error('Error booking session', error);
